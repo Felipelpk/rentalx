@@ -1,0 +1,142 @@
+// Dados variaveis
+let celular = 11992430296;
+let produtoId = 350833;
+let sku = 195244260416;
+let inicioBot = '2021-10-16 17:12:01.000';
+
+//Estados do script
+let smsCode = null
+let isSmsValide = false
+let hasScriptFinished = false
+let smsSent = 0
+let hasAddedToCart = undefined
+let canAddToCart = true
+
+// Função para aguardar um tempo de acordo com o número enviado
+function sleep(time) {
+    return new Promise((resolve) => setTimeout(resolve, time));
+};
+
+// Função para validar a data de inicio
+while (new Date(inicioBot).getTime() >= new Date().getTime()) {
+    await sleep(10);
+};
+
+// Função que simula clique no botão de adicionar no carrinho
+const CPaddToCart = () => {
+    let xhr = new XMLHttpRequest();
+    // console.log(xhr)
+    formData = new FormData();
+    formData.append('EPrincipal', sku);
+    formData.append('EAcessorio[]', '');
+    formData.append('ECompreJunto[]', '');
+    formData.append('AdicaoProdutoId', '');
+    formData.append('Origem', '');
+    formData.append('SiteId', '106');
+    formData.append('g-recaptcha-response', '');
+    xhr.open('POST', 'https://www.nike.com.br/Carrinho/Adicionar', true);
+    xhr.send(formData);
+    return xhr.readyState
+}
+
+
+// Função que envia SMS
+
+const CPSmsSend = async () => {
+    let xhr1 = new XMLHttpRequest();
+    formData = new FormData();
+    formData.append('CelularCliente', celular);
+    formData.append('ProdutoId', produtoId);
+    await xhr1.open('POST', 'https://www.nike.com.br/auth/two-factor/generate', true);
+    xhr1.onreadystatechange = () => {
+
+        while (smsSent != 4 && xhr1.readyState == 4 && xhr1.status == 200) {
+
+            console.log('Sms gerado com sucesso.');
+            smsRecebido = prompt(`Digite o SMS enviado para ${celular}`);
+            smsSent = 4
+        }
+    }
+    xhr1.send(formData);
+
+    return xhr1.readyState
+}
+
+// Função que valida o código digitado no prompt
+
+const codeValidate = async () => {
+    let xhr = new XMLHttpRequest();
+    formData = new FormData();
+    console.log(smsRecebido)
+    formData.append('NumberCode', smsRecebido);
+    formData.append('ProdutoId', produtoId);
+    await xhr.open('POST', 'https://www.nike.com.br/auth/two-factor/validate', true);
+    console.log(xhr)
+    isSmsValide = true;
+    xhr.onreadystatechange = () => {
+        console.log(xhr)
+        isSmsValide = true;
+        if (xhr.readyState == 4 && xhr.status == 200) {
+            xhr.send(formData);
+            console.log('Sms validado.');
+            isSmsValide = true;
+        } else {
+            console.log(`Erro ao validar SMS, ENVIANDO NOVO SMS PARA ${celular} EM UM SEGUNDO `);
+            smsHasSent = 0;
+        }
+    }
+}
+
+
+
+// Espera receber como retorno: 1
+
+if (canAddToCart) {
+    hasAddedToCart = await CPaddToCart()
+    canAddToCart = false
+}
+
+
+
+//verifica se o status do sms enviado é verdadeiro, caso contrário envia o sms
+while (smsSent != 4 && hasAddedToCart == 1) {
+    await CPSmsSend();
+    await sleep(1000);
+}
+
+// Entra sempre que o sms ainda não for valido e tenta validar o mesmo
+while (!isSmsValide && smsSent == 4 && !hasScriptFinished) {
+    await codeValidate()
+    await sleep(1000);
+}
+
+// Entra sempre que o sms for valido para adicionar o produto ao carrinho
+while (isSmsValide && !hasScriptFinished) {
+
+    let xhr = new XMLHttpRequest();
+    formData = new FormData();
+    formData.append('EPrincipal', sku);
+    formData.append('EAcessorio[]', '');
+    formData.append('ECompreJunto[]', '');
+    formData.append('AdicaoProdutoId', '');
+    formData.append('Origem', '');
+    formData.append('SiteId', '106');
+    formData.append('g-recaptcha-response', '');
+    xhr.open('POST', 'https://www.nike.com.br/Carrinho/Adicionar', true);
+    xhr.onreadystatechange = () => {
+        if (xhr.readyState == 4) {
+            if (xhr.status == 200) {
+                console.log('Produto adicionado. Processo finalizado.');
+                hasScriptFinished = true
+            } else {
+                console.log('Erro ao adicionar, tentando novamente...');
+                isSmsValide = false;
+            }
+        }
+    }
+    xhr.send(formData);
+    await sleep(1000);
+
+}
+
+// console.log(hasAddedToCart)
